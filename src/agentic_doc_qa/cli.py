@@ -22,45 +22,64 @@ from venv import logger
 from tqdm import tqdm
 
 
+def _add_generation_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("source", type=Path, help="Path to the source document to generate QA pairs from.")
+    p.add_argument("--model-name", required=True,
+            help="Name of the model to use, as recognized by the OpenAI-compatible endpoint at --base-url.")
+    p.add_argument("--base-url", default="http://localhost:8000/v1",
+        help="Base URL of the OpenAI-compatible model endpoint (default: %(default)s).")
+    p.add_argument("--api-key", default="none",
+        help="API key for --base-url, if required (default: %(default)s).")
+    p.add_argument("--domain-config", type=Path, default=None,
+        help="Optional domain config to use for this document. If not provided, "
+            "the base domain config will be used."
+    )
+    p.add_argument("--n-candidates", type=int, default=4,
+        help="Number of candidate QA pairs to generate per chunk. Longer documents "
+            "will end up with more total Q&A pairs (default: %(default)s).")
+
+
+def _add_logging_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--verbose", action="store_true", help="Enable debug-level logging.")
+    p.add_argument("--send-to-logfire", action="store_true", help="Send traces to Logfire.")
+
+
+def _add_validated_dir_arg(p: argparse.ArgumentParser) -> None:
+    # user-facing flag stays --output-dir for consistency with `generate`;
+    # stored as args.validated_dir for relevance to the review/chat/web commands
+    p.add_argument("--output-dir", dest="validated_dir", type=Path, required=True,
+        metavar="OUTPUT_DIR", help="Directory to write human-validated QA pairs to.")
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="agentic-doc-qa")
     sub = ap.add_subparsers(dest="command", required=True)
 
     gen = sub.add_parser("generate", help="Batch-generate QA pairs, unattended.")
-    gen.add_argument("source", type=Path)
-    gen.add_argument("--output-dir", type=Path, required=True)
-    gen.add_argument("--domain-config", type=Path, default=None)
-    gen.add_argument("--n-candidates", type=int, default=4, help="Number of candidate QA pairs to generate per chunk. Longer documents will end up with more total Q&A pairs.")
-    gen.add_argument("--model-name", required=True)
-    gen.add_argument("--base-url", default="http://localhost:8000/v1")
-    gen.add_argument("--api-key", default="none")
-    gen.add_argument("--verbose", action="store_true")
-    gen.add_argument("--send-to-logfire", action="store_true")
+    gen.add_argument("--output-dir", type=Path, required=True,
+        help="Directory to write generated QA pairs to.")
+    _add_generation_args(gen)
+    _add_logging_args(gen)
     # pages-per-chunk / image-scale as in the old generate.py's arg parser
 
     review = sub.add_parser("review", help="Launch the batch Streamlit reviewer.")
-    review.add_argument("--input-dir", type=Path, required=True)
-    review.add_argument("--approved-dir", type=Path, required=True)
-    review.add_argument("--verbose", action="store_true")
+    review.add_argument("--input-dir", type=Path, required=True,
+        help="Directory containing the output of a previous 'generate' run.")
+    _add_validated_dir_arg(review)
+    _add_logging_args(review)
 
     chat = sub.add_parser("chat", help="Interactive terminal review during generation.")
-    chat.add_argument("source", type=Path)
-    chat.add_argument("--approved-dir", type=Path, required=True)
-    chat.add_argument("--domain-config", type=Path, default=None)
-    chat.add_argument("--n-candidates", type=int, default=4, help="Default number of candidate QA pairs to propose per chunk. The reviewer can ask for a different count in chat.")
-    chat.add_argument("--model-name", required=True)
-    chat.add_argument("--base-url", default="http://localhost:8000/v1")
-    chat.add_argument("--api-key", default="none")
-    chat.add_argument("--verbose", action="store_true")
-    chat.add_argument("--send-to-logfire", action="store_true")
+    _add_validated_dir_arg(chat)
+    _add_generation_args(chat)
+    _add_logging_args(chat)
 
     web = sub.add_parser("web", help="Interactive browser review during generation.")
-    # same args as chat, plus:
-    web.add_argument("--host", default="127.0.0.1")
-    web.add_argument("--port", type=int, default=7932)
-    web.add_argument("--reload", action="store_true")
-    web.add_argument("--verbose", action="store_true")
-    web.add_argument("--send-to-logfire", action="store_true")
+    _add_validated_dir_arg(web)
+    _add_generation_args(web)
+    web.add_argument("--host", default="127.0.0.1", help="Host to bind the web server to (default: %(default)s).")
+    web.add_argument("--port", type=int, default=7932, help="Port to bind the web server to (default: %(default)s).")
+    web.add_argument("--reload", action="store_true", help="Enable auto-reload for development.")
+    _add_logging_args(web)
 
     return ap
 
@@ -104,9 +123,8 @@ async def _generate_async(args) -> None:
 
 
 def cmd_generate(args) -> None:
-    """Mirrors old generate.py's run(): load_domain_config, load_chunks, loop
-    chunks through pipeline.propose_qa_pairs(), write to --output-dir via
-    pipeline.save_qa_pairs()."""
+    """wraps _generate_async() in asyncio.run() so we can call it from the CLI
+    """
     import asyncio
     asyncio.run(_generate_async(args))
 
@@ -119,7 +137,7 @@ def cmd_review(args) -> None:
     app_path = Path(__file__).parent / "review_app.py"
     subprocess.run([
         sys.executable, "-m", "streamlit", "run", str(app_path), "--",
-        "--input-dir", str(args.input_dir), "--approved-dir", str(args.approved_dir),
+        "--input-dir", str(args.input_dir), "--validated-dir", str(args.validated_dir),
     ])
 
 
@@ -138,7 +156,7 @@ def cmd_chat(args) -> None:
 
     domain_cfg = load_domain_config(args.domain_config)
     model = build_model(args.model_name, base_url=args.base_url, api_key=args.api_key)
-    agent = build_doc_qa_agent(model, args.source, domain_cfg, args.approved_dir, default_n_candidates=args.n_candidates)
+    agent = build_doc_qa_agent(model, args.source, domain_cfg, args.validated_dir, default_n_candidates=args.n_candidates)
 
     bootstrap = agent.run_sync(
         f"Begin the review session: propose QA pairs for chunk_index=0 "
