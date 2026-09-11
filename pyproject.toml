@@ -1,0 +1,26 @@
+[project]
+name = "agentic-doc-qa"
+requires-python = ">=3.12"
+version = "0.1.0"
+dependencies = [
+    "pydantic-ai",
+    "loguru",
+    "tqdm",
+    "pypdfium2>=4.30.0,<6.0.0",
+    "python-frontmatter>=1.3.0",
+    "pyyaml>=6.0",
+    "pillow>=12.3.0",
+    "logfire[system-metrics]>=5.0.0",
+    "streamlit>=1.63.0",
+]
+
+[project.scripts]
+agentic-doc-qa = "agentic_doc_qa.cli:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+review = ["streamlit>=1.49"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

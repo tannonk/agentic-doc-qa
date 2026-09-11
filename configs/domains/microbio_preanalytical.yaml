@@ -1,0 +1,45 @@
+domain: microbio_preanalytical
+generation:
+  instructions_addendum: |
+    ## Additional instructions for microbiology-related sources
+
+    The document is a microbiology-related source. 
+    
+    Identify and generate questions that are relevant to preanalytical procedures in microbiology and molecular diagnostics.
+    
+    Use the following example questions as a guide for the type of questions to generate:
+    
+    {example_questions}
+
+    Ensure that the generated questions are specific, clear, and relevant to the scientific, microbiology context.
+  example_questions_sample_size: 8
+  example_questions:
+    - "What is the correct fill volume for a Urine-monovette with stabilizer?"
+    - "How is a catheter tip sent for microbiological examination?"
+    - "How do I take a native stool sample and how do I take a stool sample with a FecalSwab?"
+    - "How should prostheses be sent to the laboratory for examination with sonication?"
+    - "What are suitable materials for PCR detection of Borrelia burgdorferi?"
+    - "How should tissue samples for molecular diagnostic pathogen detection be sent?"
+    - "Are paraffin sections suitable for molecular diagnostic pathogen detection by PCR?"
+    - "Is heparin blood suitable for molecular diagnostic pathogen detection by PCR?"
+    - "Is urine suitable for the detection of Tropheryma whipplei?"
+    - "What is the correct fill volume for an adult blood culture bottle?"
+    - "How many blood culture pairs should be taken at least in an adult suspected of bloodstream infections?"
+    - "How should blood cultures be taken for suspected catheter infection?"
+    - "What storage is recommended if a blood culture bottle cannot be immediately placed into a blood culture machine after collection, and what is the maximum duration of this storage?"
+    - "Ideally, from which urine should the molecular biological detection of Chlamydia trachomatis be performed?"
+    - "After what time after collection should sputum be in the laboratory for processing at the latest?"
+    - "How should urine be stored after collection until it is transported to the laboratory?"
+    - "Decubital ulcer - how is which material correctly taken?"
+    - "What should be considered when examining gastric juice for tuberculosis pathogens?"
+    - "Which tube must be used for specific laboratory analyses?"
+    - "Can a hemolytic plasma/serum sample be examined?"
+    - "Can a lipemic plasma/serum sample be examined?"
+    - "Can medications influence the determination of specific laboratory analyses?"
+    - "What material is optimal for the detection of pulmonary tuberculosis?"
+    - "If a BAL is sent for TB diagnostics, how much material must be sent?"
+    - "There is suspicion of lymph node TB. A puncture was performed, but all material was sent to pathology and fixed. What can be done to detect tuberculosis?"
+    - "Can I send a wound swab or throat swab for TB diagnostics?"
+    - "Material was sent for the detection of mycobacteria. Can a subsequent examination for general bacteriology or a molecular examination for pathogens other than mycobacteria be performed from this material?"
+    - "We have an MRSA positive biopsy from a patient and would like to know whether the MRSA strain is the same as an already typed strain. What kind of material can I send in and what is the procedure?"
+    - "We would like to have a bacterial culture typed. What is the best way to send the culture? Should the shipment be refrigerated and what do I have to pay attention to?"
