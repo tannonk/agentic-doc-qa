@@ -103,20 +103,17 @@ Workflow:
 
 def build_doc_qa_agent(
     model, source: Path, domain_cfg: DomainConfig, approved_dir: Path, default_n_candidates: int = 4,
+    vision: bool = True,
 ) -> Agent:
     """Tools close over document state (chunks/metadata/domain) loaded once
     when the chat/web session starts, rather than using deps_type -- to_cli_sync()
     and to_web() drive their own run loop, so per-session state lives in the
     closure, not in a deps object threaded through run() calls you don't control."""
-    from datetime import datetime, timezone
-
     from agentic_doc_qa.documents import load_chunks
     from agentic_doc_qa.pipeline import propose_qa_pairs, save_qa_pairs
     from agentic_doc_qa import review_io
 
-    chunks, metadata, source_id = load_chunks(source)
-
-    log_path = approved_dir / "review_log.jsonl"
+    chunks, metadata, source_id = load_chunks(source, vision=vision)
 
     doc_qa_agent = Agent(model, name="doc_qa_agent", instructions=CHAT_COORDINATOR_INSTRUCTIONS)
     last_proposals: dict[int, list[JudgedQAPair]] = {}  # chunk_index -> judge-accepted JudgedQAPair list, most recent proposal only
@@ -145,6 +142,7 @@ def build_doc_qa_agent(
             model, domain_cfg, chunks[chunk_index], n_candidates,
             reviewer_feedback=reviewer_feedback,
             avoid_questions=avoid_questions,
+            total_chunks=len(chunks)
         )
         last_proposals[chunk_index] = accepted
         chunk_seen_questions.setdefault(chunk_index, set()).update(jp.pair.question for jp in accepted)
@@ -153,17 +151,14 @@ def build_doc_qa_agent(
     @doc_qa_agent.tool_plain
     def save(chunk_index: int, pair_indexes: list[int]) -> str:
         """Write the reviewer's chosen subset of the last proposal for this
-        chunk. Only call this in direct response to the reviewer naming which
-        pairs to keep -- that message is the actual approval gate."""
+        chunk, then mark each as approved -- the reviewer naming which pairs
+        to keep IS the approval decision, so no separate pending state or log
+        is needed here."""
         pairs = [last_proposals[chunk_index][i] for i in pair_indexes]
         written = save_qa_pairs([(p, chunks[chunk_index]) for p in pairs], source_id, metadata, approved_dir)
         for path in written:
-            review_io.append_log(log_path, {
-                "file": path.name,
-                "decision": "approved",
-                "edited": False,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
+            record = review_io.load_record(path)
+            review_io.approve(record, path, approved_dir, approved_dir)
         saved_counts[chunk_index] = saved_counts.get(chunk_index, 0) + len(written)
         return f"Saved {len(written)} pair(s): {', '.join(p.name for p in written)}."
 

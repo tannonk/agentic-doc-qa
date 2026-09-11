@@ -82,6 +82,7 @@ async def propose_qa_pairs(
     model, domain_cfg: DomainConfig, chunk: Chunk, n_candidates: int,
     reviewer_feedback: str | None = None,
     avoid_questions: list[str] | None = None,
+    total_chunks: int | None = None,
 ) -> list[JudgedQAPair]:
     """Generate, judge, and — if anything was rejected — regenerate once with
     the judge's feedback, then judge again. Every accepted pair from both
@@ -115,7 +116,7 @@ async def propose_qa_pairs(
     pool: list[JudgedQAPair] = []
     current_usage = None
     for attempt in range(2):
-        logger.info(f"Generating QA pairs for chunk {chunk.index}, attempt {attempt + 1}")
+        logger.info(f"Generating QA pairs for chunk {chunk.index} (of {total_chunks}), attempt {attempt + 1}")
 
         result = await generation_agent.run(chunk.content, deps=deps, usage=current_usage)
         candidates = result.output.pairs
