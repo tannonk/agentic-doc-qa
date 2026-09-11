@@ -28,6 +28,7 @@ from agentic_doc_qa.review_io import (
     decision_for,
     list_all_source_records,
     load_record,
+    record_key,
     reject,
     resolve_source,
 )
@@ -126,8 +127,9 @@ def _save_and_approve_callback(input_dir: Path, validated_dir: Path) -> None:
         st.session_state.editing = False
         _advance_to_next_pending(st.session_state.pos)
         return
-    question = st.session_state.get(f"q-{path.name}", record.question)
-    answer = st.session_state.get(f"a-{path.name}", record.answer)
+    key = record_key(path, input_dir)
+    question = st.session_state.get(f"q-{key}", record.question)
+    answer = st.session_state.get(f"a-{key}", record.answer)
     amended = record.model_copy(update={"question": question, "answer": answer})
     approve(amended, path, input_dir, validated_dir, edited=True)
     st.session_state.editing = False
@@ -142,8 +144,7 @@ def _page_next_callback(page_key: str, max_page: int) -> None:
     st.session_state[page_key] = min(max_page, st.session_state[page_key] + 1)
 
 
-def _render_source(record, source_root: Path, path_name: str, image_scale: float) -> None:
-    
+def _render_source(record, source_root: Path, key: str, image_scale: float) -> None:
     source_path = resolve_source(record, source_root)
     if not source_path.exists():
         st.error(f"Source file not found: {record.metadata.get('source_path')!r}")
@@ -161,40 +162,43 @@ def _render_source(record, source_root: Path, path_name: str, image_scale: float
         pages_png = _render_pdf(str(source_path), image_scale)
         if record.pages:
             st.info(f"Generated from pages {record.pages[0]}–{record.pages[1]} of {len(pages_png)}")
-        page_key = f"page-{path_name}"
+        page_key = f"page-{key}"
         if page_key not in st.session_state:
             st.session_state[page_key] = record.pages[0] if record.pages else 1
         if len(pages_png) > 1:
             col_prev, col_indicator, col_next = st.columns([1, 2, 1])
             col_prev.button(
-                "◀ Prev page", key=f"prevpage-{path_name}",
+                "◀ Prev page", key=f"prevpage-{key}",
                 disabled=st.session_state[page_key] <= 1,
                 on_click=_page_prev_callback, args=(page_key,),
             )
             col_indicator.markdown(f"Page {st.session_state[page_key]} / {len(pages_png)}")
             col_next.button(
-                "Next page ▶", key=f"nextpage-{path_name}",
+                "Next page ▶", key=f"nextpage-{key}",
                 disabled=st.session_state[page_key] >= len(pages_png),
                 on_click=_page_next_callback, args=(page_key, len(pages_png)),
             )
         page = st.session_state[page_key]
-        st.image(pages_png[page - 1], width="stretch")
+        try:
+            st.image(pages_png[page - 1], width="stretch")
+        except IndexError:
+            st.error(f"Page {page} not found in PDF (only {len(pages_png)} pages) for {source_path.name}.")
     else:
         st.error(f"Unsupported source file type: {source_path.suffix}")
 
 
-def _render_qa_panel(record, path, input_dir: Path, validated_dir: Path, decision: QARecord | None) -> None:
+def _render_qa_panel(record, key: str, input_dir: Path, validated_dir: Path, decision: QARecord | None) -> None:
     if decision is not None and decision.annotation is not None:
         st.caption(f"Already {decision.annotation.decision.value} — {decision.annotation.timestamp}")
 
     if st.session_state.editing:
-        with st.form(key=f"edit-{path.name}"):
-            st.text_area("Question", value=record.question, key=f"q-{path.name}", height=120)
-            st.text_area("Answer", value=record.answer, key=f"a-{path.name}", height=160)
+        with st.form(key=f"edit-{key}"):
+            st.text_area("Question", value=record.question, key=f"q-{key}", height=120)
+            st.text_area("Answer", value=record.answer, key=f"a-{key}", height=160)
             st.form_submit_button(
                 "Save & approve", on_click=_save_and_approve_callback, args=(input_dir, validated_dir),
             )
-        st.button("Cancel", key=f"cancel-{path.name}", on_click=_cancel_edit_callback)
+        st.button("Cancel", key=f"cancel-{key}", on_click=_cancel_edit_callback)
         return
 
     st.markdown("##### Question")
@@ -213,13 +217,13 @@ def _render_qa_panel(record, path, input_dir: Path, validated_dir: Path, decisio
 
     col_approve, col_edit, col_reject, col_skip = st.columns(4)
     col_approve.button(
-        "✅ Approve", key=f"approve-{path.name}", on_click=_approve_callback, args=(input_dir, validated_dir),
+        "✅ Approve", key=f"approve-{key}", on_click=_approve_callback, args=(input_dir, validated_dir),
     )
-    col_edit.button("✏️ Edit", key=f"edit-{path.name}", on_click=_edit_callback)
+    col_edit.button("✏️ Edit", key=f"edit-{key}", on_click=_edit_callback)
     col_reject.button(
-        "❌ Reject", key=f"reject-{path.name}", on_click=_reject_callback, args=(input_dir, validated_dir),
+        "❌ Reject", key=f"reject-{key}", on_click=_reject_callback, args=(input_dir, validated_dir),
     )
-    col_skip.button("⏭ Skip", key=f"skip-{path.name}", on_click=_skip_callback)
+    col_skip.button("⏭ Skip", key=f"skip-{key}", on_click=_skip_callback)
 
 
 def main() -> None:
@@ -277,11 +281,12 @@ def main() -> None:
     done = st.session_state.total - pending_count
     st.caption(f"Reviewing {done}/{st.session_state.total} — item {pos + 1}/{n} — {path.name}")
 
+    key = record_key(path, args.input_dir)
     left, right = st.columns([2, 3])
     with left:
-        _render_qa_panel(record, path, args.input_dir, args.validated_dir, decisions[pos])
+        _render_qa_panel(record, key, args.input_dir, args.validated_dir, decisions[pos])
     with right:
-        _render_source(record, args.source_root, path.name, args.image_scale)
+        _render_source(record, args.source_root, key, args.image_scale)
 
 
 if __name__ == "__main__":
