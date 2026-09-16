@@ -1,0 +1,19 @@
+{
+  "answer": "3 drops are applied, with a 30‑second interval before each subsequent drop.",
+  "judgement": {
+    "decision": "accept",
+    "rationale": "The question refers to step 4 of the test procedure, requiring identification of the number of drops (3) and the interval (30 seconds). The answer matches the source text exactly and is specific to this document.",
+    "score": 5
+  },
+  "metadata": {
+    "chunk_index": 0,
+    "pages": [
+      1,
+      4
+    ],
+    "source_path": "data/examples/raw/6b2275c87add.pdf"
+  },
+  "question": "In step 4 of the test procedure, how many drops of specimen are applied and after how many seconds must the next drop be applied?",
+  "question_level": "medium",
+  "question_type": "multi_hop"
+}

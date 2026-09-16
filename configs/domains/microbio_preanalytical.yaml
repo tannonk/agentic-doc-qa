@@ -1,4 +1,11 @@
 domain: microbio_preanalytical
+question_types:
+  factual: direct recall from one passage
+  inferential: requires connecting an implication, not stated directly
+  multi_hop: requires combining info from two or more sections
+  comparison: requires comparing two or more items, values, or passages
+  table_figure: requires reading a table or figure/chart, or combining info from a table/figure with text
+  summarization: requires condensing a section or the whole document
 generation:
   instructions_addendum: |
     ## Additional instructions for microbiology-related sources

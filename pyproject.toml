@@ -18,8 +18,11 @@ dependencies = [
 agentic-doc-qa = "agentic_doc_qa.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "pytest-asyncio>=0.24"]
-review = ["streamlit>=1.49"]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.16.7"
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

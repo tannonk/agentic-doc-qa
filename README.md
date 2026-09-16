@@ -10,7 +10,9 @@ To set up the AGENTIC-DOC-QA package, follow these steps:
 
 ```bash
 conda create -n agentic-doc-qa python=3.13 -y && conda activate agentic-doc-qa
-uv pip install -e .
+uv pip install -e . 
+# alternatively, if you want to install for development, you can use:
+uv pip install -e . --group dev
 ```
 
 ### Example usage:
@@ -60,9 +62,8 @@ agentic-doc-qa chat "data/examples/raw/1706.03762v7.pdf" \
 
 ### Domain-specific Support
 
-Q&A generation is aided by domain-specific configuration files, which can be specified using the `--domain-config` argument. See the `configs/domains/` directory for examples of domain configurations.
-
-We provide a domain configurations through YAML files in the `configs/domains/` directory. Each configurations defines domain-specific rules, prompts, and other parameters to guide the generation and review of Q&A pairs. By default, the system uses a base domain configuration, but allows for domain-specific overrides, meaning that you don't have redefine default behavior for every domain. See the current domain configurations for examples of how to define domain-specific rules and prompts.
+Q&A generation is aided by domain-specific configuration files, which can be specified using the `--domain-config` argument. 
+Each configuration defines domain-specific rules, prompts, question types, and other parameters to guide the generation and review of Q&A pairs. By default, the system uses a base domain configuration, but allows for domain-specific overrides, meaning that you don't have redefine default behavior for every domain. See the `configs/domains/` directory for examples of domain configurations.
 
 
 ### Input Document Formats
