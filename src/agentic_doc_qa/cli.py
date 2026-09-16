@@ -92,14 +92,6 @@ def build_arg_parser() -> argparse.ArgumentParser:
     _add_generation_args(chat)
     _add_logging_args(chat)
 
-    web = sub.add_parser("web", help="Interactive browser review during generation.")
-    _add_output_dir_arg(web)
-    _add_generation_args(web)
-    _add_logging_args(web)
-    web.add_argument("--host", default="127.0.0.1", help="Host to bind the web server to (default: %(default)s).")
-    web.add_argument("--port", type=int, default=7932, help="Port to bind the web server to (default: %(default)s).")
-    web.add_argument("--reload", action="store_true", help="Enable auto-reload for development.")
-
     return ap
 
 
@@ -197,29 +189,8 @@ def cmd_chat(args) -> None:
 
 
 def cmd_web(args) -> None:
-    """Same setup as cmd_chat, then uvicorn.run(agent.to_web(), host=..., port=...)."""
-    import logfire
-    import uvicorn
-    from agentic_doc_qa.agents import build_doc_qa_agent
-    from agentic_doc_qa.domains import load_domain_config
-    from agentic_doc_qa.models import build_model
-
-    if not args.source.exists():
-        raise FileNotFoundError(f"Source document not found: {args.source}")
-
-    logfire.configure(send_to_logfire=args.send_to_logfire)
-    logfire.instrument_pydantic_ai()
-
-    domain_cfg = load_domain_config(args.domain_config)
-    model = build_model(args.model_name, base_url=args.base_url, api_key=args.api_key)
-    agent = build_doc_qa_agent(model, args.source, domain_cfg, args.output_dir_base / "validated", default_n_candidates=args.n_candidates, vision=not args.no_vision)
-
-    bootstrap = agent.run_sync(
-        f"Begin the review session: propose QA pairs for chunk_index=0 "
-        f"using n_candidates={args.n_candidates}, then present them to me."
-    )
-    print(bootstrap.output)
-    uvicorn.run(agent.to_web(), host=args.host, port=args.port, reload=args.reload)
+    """Placeholder for a future web-based review interface. Currently, this is not implemented."""
+    raise NotImplementedError("Web-based review interface is not yet implemented.")
 
 
 def main() -> None:
