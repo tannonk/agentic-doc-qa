@@ -16,6 +16,7 @@ from agentic_doc_qa.documents import (
 
 
 def test_split_front_matter_absent():
+    """A document with no front matter block should parse with empty metadata and the body unchanged."""
     raw = "Just a plain document with no front matter."
     post = frontmatter.loads(raw)
     metadata, body = post.metadata, post.content
@@ -24,6 +25,7 @@ def test_split_front_matter_absent():
 
 
 def test_split_front_matter_present():
+    """A document with a valid YAML front matter block should split into typed metadata and body text."""
     # YAML parses unquoted ISO date literals into datetime.date, not str.
     content = "The body text."
     raw = f"---\ntitle: Example\npubtime: 2026-01-01\n---\n{content}\n"
@@ -34,6 +36,7 @@ def test_split_front_matter_present():
 
 
 def test_split_front_matter_malformed_missing_closer():
+    """A front matter block missing its closing '---' marker should be treated as plain text, not parsed as metadata."""
     raw = "---\ntitle: Example\nThe body text with no closing marker."
     post = frontmatter.loads(raw)
     metadata, body = post.metadata, post.content
@@ -42,6 +45,7 @@ def test_split_front_matter_malformed_missing_closer():
 
 
 def test_split_front_matter_unquoted_colon_in_value_falls_back_to_permissive_parse():
+    """Front matter with an unquoted colon in a value is invalid YAML and should not crash the loader."""
     # headline contains an unquoted colon -> invalid YAML (nested-mapping parse
     # error) -> should raise exception and return empty metadata dict, not crash.
     raw = "---\nheadline: Bei Trump-Anwesen: Sicherheitskräfte erschiessen bewaffneten Mann\nsource: Basler Zeitung\n---\nBody.\n"
@@ -58,6 +62,7 @@ def test_split_front_matter_unquoted_colon_in_value_falls_back_to_permissive_par
 
 
 def test_split_front_matter_non_mapping():
+    """Front matter that parses to a YAML list, not a mapping, should yield empty metadata."""
     raw = "---\n- just\n- a\n- list\n---\nBody.\n"
     post = frontmatter.loads(raw)
     metadata, body = post.metadata, post.content
@@ -66,6 +71,7 @@ def test_split_front_matter_non_mapping():
 
 
 def test_load_chunks_markdown_sends_raw_text_unstripped(tmp_path):
+    """Loading a markdown file should split off front matter metadata, produce one chunk with the stripped body, and derive a stable source ID from the raw file content."""
     content = "Body text here."
     raw = f"---\nmedium_name: Example Times\npubtime: 2026-01-01\n---\n\n{content}\n"
     source_path = tmp_path / "doc.md"
@@ -79,6 +85,7 @@ def test_load_chunks_markdown_sends_raw_text_unstripped(tmp_path):
 
 
 def test_load_chunks_txt_no_front_matter(tmp_path):
+    """Loading a plain .txt file (no front matter) should produce one chunk with empty metadata."""
     raw = "Plain text document.\n"
     source_path = tmp_path / "doc.txt"
     source_path.write_text(raw, encoding="utf-8")
@@ -104,18 +111,22 @@ def test_load_chunks_unsupported_suffix_raises(tmp_path):
         
 
 def test_page_chunk_ranges_even_split():
+    """When the page count divides evenly by chunk size, ranges should be equal-sized with no remainder."""
     assert _page_chunk_ranges(10, 5) == [(0, 5), (5, 10)]
 
 
 def test_page_chunk_ranges_uneven_split():
+    """When the page count does not divide evenly, the final range should hold the leftover pages."""
     assert _page_chunk_ranges(12, 5) == [(0, 5), (5, 10), (10, 12)]
 
 
 def test_page_chunk_ranges_single_chunk():
+    """When there are fewer pages than the chunk size, a single range covering all pages should be returned."""
     assert _page_chunk_ranges(3, 5) == [(0, 3)]
 
 
 def test_page_chunk_ranges_zero_pages():
+    """With zero pages, no ranges should be returned."""
     assert _page_chunk_ranges(0, 5) == []
 
 
@@ -129,6 +140,7 @@ def _make_pdf(path, n_pages: int) -> None:
 
 
 def test_render_pdf_pages_png_returns_one_png_per_page(tmp_path):
+    """Rendering a PDF should return one valid PNG image per page."""
     pdf_path = tmp_path / "doc.pdf"
     _make_pdf(pdf_path, 3)
 
@@ -139,6 +151,7 @@ def test_render_pdf_pages_png_returns_one_png_per_page(tmp_path):
 
 
 def test_load_pdf_chunks_records_page_ranges(tmp_path):
+    """Each PDF chunk should record the correct 1-indexed page range it covers."""
     pdf_path = tmp_path / "doc.pdf"
     _make_pdf(pdf_path, 3)
 
@@ -151,6 +164,7 @@ def test_load_pdf_chunks_records_page_ranges(tmp_path):
 
 
 def test_load_chunks_markdown_has_no_page_range(tmp_path):
+    """Chunks from a non-PDF source (markdown) should have no page range, since pages don't apply."""
     source_path = tmp_path / "doc.md"
     source_path.write_text("Body text.\n", encoding="utf-8")
 
