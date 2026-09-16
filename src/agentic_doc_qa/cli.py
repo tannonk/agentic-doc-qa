@@ -28,9 +28,10 @@ Example usage:
 """
 
 import argparse
-import logging
 from pathlib import Path
-from venv import logger
+import sys
+
+from loguru import logger
 from tqdm import tqdm
 
 
@@ -146,7 +147,6 @@ def cmd_generate(args) -> None:
     """
     import logfire
 
-    logger.setLevel(logging.DEBUG) if args.verbose else logger.setLevel(logging.INFO)
     logfire.configure(send_to_logfire=args.send_to_logfire)
     logfire.instrument_pydantic_ai()
 
@@ -157,10 +157,7 @@ def cmd_generate(args) -> None:
 def cmd_review(args) -> None:
     """Shell out to streamlit -- review_app.py can't be called as a plain
     function without the Streamlit runtime."""
-    import sys
     import subprocess
-    
-    logger.setLevel(logging.DEBUG) if args.verbose else logger.setLevel(logging.INFO)
     
     app_path = Path(__file__).parent.parent / "review_app.py"
     subprocess.run([
@@ -183,7 +180,6 @@ def cmd_chat(args) -> None:
     if not args.source.exists():
         raise FileNotFoundError(f"Source document not found: {args.source}")
 
-    logger.setLevel(logging.DEBUG) if args.verbose else logger.setLevel(logging.INFO)
     logfire.configure(send_to_logfire=args.send_to_logfire)
     logfire.instrument_pydantic_ai()
 
@@ -211,7 +207,6 @@ def cmd_web(args) -> None:
     if not args.source.exists():
         raise FileNotFoundError(f"Source document not found: {args.source}")
 
-    logger.setLevel(logging.DEBUG) if args.verbose else logger.setLevel(logging.INFO)
     logfire.configure(send_to_logfire=args.send_to_logfire)
     logfire.instrument_pydantic_ai()
 
@@ -229,6 +224,12 @@ def cmd_web(args) -> None:
 
 def main() -> None:
     args = build_arg_parser().parse_args()
+
+    # set up stderr logging (loguru uses DEBUG level by default)
+    if not args.verbose:
+        logger.remove()
+        logger.add(sys.stderr, level="INFO")
+
     {"generate": cmd_generate, "review": cmd_review, "chat": cmd_chat, "web": cmd_web}[args.command](args)
 
 
