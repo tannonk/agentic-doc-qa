@@ -18,7 +18,7 @@ def _build_judge_user_content(
     chunk: Chunk, candidates: list[QAPair], avoid_questions: list[str] | None = None
 ) -> str | list:
     listing = "\n".join(
-        f"[{i}] Q: {c.question} A: {c.answer} (type={c.question_type.value}, level={c.question_level.value})"
+        f"[{i}] Q: {c.question} A: {c.answer} (type={c.question_type}, level={c.question_level})"
         for i, c in enumerate(candidates)
     )
     listing_block = f"Candidate QA pairs to judge:\n{listing}"

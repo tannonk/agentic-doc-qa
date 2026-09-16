@@ -1,4 +1,16 @@
 domain: base
+question_types:
+  factual: direct recall from one passage
+  inferential: requires connecting an implication, not stated directly
+  multi_hop: requires combining info from two or more sections
+  comparison: requires comparing two or more items, values, or passages
+  table_figure: requires reading a table or figure/chart, or combining info from a table/figure with text
+  summarization: requires condensing a section or the whole document
+difficulty_levels:
+  easy: direct recall of a single explicitly stated fact.
+  medium: requires combining two facts, or light inference/paraphrase of one passage.
+  hard: requires integrating three or more separate passages, or reasoning over a table/figure plus text.
+  unanswerable: the question is about a topic the document plausibly SHOULD cover but does not.
 generation:
   instructions: |
     Your task is to generate question-answer pairs from a source document. 
@@ -27,19 +39,13 @@ generation:
 
     ## Type definitions
 
-    - "factual": direct recall from one passage
-    - "inferential": requires connecting an implication, not stated directly
-    - "multi_hop": requires combining info from two+ sections
-    - "comparison": requires comparing two or more items, values, or passages
-    - "table_figure": requires reading a table or figure/chart, or combining info from a table/figure with text
-    - "summarization": requires condensing a section or the whole document
+    {question_types_block}
 
     ## Difficulty definitions
 
-    - "easy": direct recall of a single explicitly stated fact.
-    - "medium": requires combining two facts, or light inference/paraphrase of one passage.
-    - "hard": requires integrating three or more separate passages, or reasoning over a table/figure plus text.
-    - "unanswerable": the question is about a topic the document plausibly SHOULD cover but does not. It must remain topically and lexically close to the document so it still retrieves it, while having no supported answer.
+    {difficulty_levels_block}
+
+    For "unanswerable": the question must remain topically and lexically close to the document so it still retrieves it, while having no supported answer.
       GOOD: "What was the cost per unit of the W-4 weld repair in the 2021 Halden inspection?" (document covers the repair, never states cost.)
       BAD:  "What is the capital of Peru?" (unrelated; tests nothing.)
 

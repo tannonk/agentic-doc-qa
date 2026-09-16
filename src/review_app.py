@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 #-*- coding: utf-8 -*-
 
-"""Streamlit app for manual review of generated QA pairs.
+"""Streamlit app for post-hoc, manual review of generated QA pairs.
 
 Thin UI layer over review_io: all filesystem/decision logic lives there so it
 stays unit-testable without a running Streamlit session.
 
 Launch:
 
-    uv run --group review streamlit run src/doc_qa/review_app.py -- \\
-        --input-dir data/local/swissdox/outputs \\
-        --validated-dir data/local/swissdox/validated
+    python -m streamlit run src/review_app.py -- \
+        --input-dir data/examples/outputs \
+        --validated-dir data/examples/outputs/validated
 
 (Streamlit forwards everything after `--` to the script.)
 """
@@ -206,7 +206,7 @@ def _render_qa_panel(record, key: str, input_dir: Path, validated_dir: Path, dec
     st.markdown("##### Answer")
     st.markdown(record.answer)
 
-    badges = f"`{record.question_type.value}` · `{record.question_level.value}`"
+    badges = f"`{record.question_type}` · `{record.question_level}`"
     chunk_index = record.metadata.get("chunk_index")
     if chunk_index is not None:
         badges += f" · chunk {chunk_index}"

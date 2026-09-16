@@ -4,13 +4,7 @@ generation:
   instructions_addendum: |
     ## Additional instructions for news articles
 
-    This document is a news article. Available metadata about it is listed
-    below.
+    This document is a news article. Available metadata about it is listed below.
 
-    Weave identifying details from this metadata (e.g. an outlet name and/or
-    publication date, whatever fields are actually present) directly into
-    factoid, definition, and yes-no questions (e.g. "According to a report
-    published by <outlet> on <date>, ...") so each question remains matchable to
-    this specific article even among near-identical wire-service stories
-    republished by other outlets on the same day.
+    Weave identifying details from this metadata (e.g. an outlet name and/or publication date, whatever fields are actually present) directly into questions (e.g. "According to a report published by <outlet> on <date>, ...") so each question remains matchable to this specific article even among near-identical wire-service stories republished by other outlets on the same day.
   example_questions_sample_size: 2

@@ -1,12 +1,12 @@
-# AGENT-DOC-QA
+# AGENTIC-DOC-QA
 
-AGENT-DOC-QA is a Python package for building high-quality question-answering pairs from input documents.
+AGENTIC-DOC-QA is a Python package for building high-quality question-answering pairs from input documents.
 
-**Note:** This tool is a redesign of the original [auto-doc-qa](https://gitlab.uzh.ch/LiRI/projects/auto-doc-qa), which used single-turn LLM prompts to generate Q&A pairs. AGENT-DOC-QA leverages `pydantic-ai`. See below for the motivation.
+**Note:** This tool is a redesign of the original [auto-doc-qa](https://gitlab.uzh.ch/LiRI/projects/auto-doc-qa), which used single-turn LLM prompts to generate Q&A pairs. AGENTIC-DOC-QA leverages `pydantic-ai`. See below for the motivation.
 
 ## Setup
 
-To set up the AGENT-DOC-QA package, follow these steps:
+To set up the AGENTIC-DOC-QA package, follow these steps:
 
 ```bash
 conda create -n agentic-doc-qa python=3.13 -y && conda activate agentic-doc-qa
@@ -20,22 +20,20 @@ uv pip install -e .
 **Step 1:** Generate Q&A pairs from a PDF document using a specified model.
 
 ```bash
-agentic-doc-qa generate "data/local/microbio-rag/raw_data/Packungsbeilagen Bakteriologie/BinaxNOW Legionella.pdf" \
-    --output-dir "data/local/agentic-doc-qa/test" \
+agentic-doc-qa generate "data/examples/raw/1706.03762v7.pdf" \
+    --output-dir "data/examples/outputs/" \
     --n-candidates 4 \
-    --model-name "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4" \
-    --domain-config "configs/domains/microbio_preanalytical.yaml"
+    --model-name "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8"
 ```
 
 To run the generation step on multiple documents, you can use a shell loop:
 
 ```bash
-for doc in data/local/microbio-rag/raw_data/Packungsbeilagen\ Bakteriologie/*.pdf; do
+for doc in data/examples/raw/*.pdf; do
     agentic-doc-qa generate "$doc" \
-        --output-dir "data/local/agentic-doc-qa/test" \
+        --output-dir "data/examples/outputs/" \e
         --n-candidates 4 \
-        --model-name "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4" \
-        --domain-config "configs/domains/microbio_preanalytical.yaml"
+        --model-name "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8"
 done
 ```
 
@@ -43,25 +41,26 @@ done
 
 ```bash
 agentic-doc-qa review \
-    --input-dir data/local/agentic-doc-qa/test/ \
-    --output-dir-base data/local/agentic-doc-qa/test/ # will create a "validated" subdir for approved Q&A pairs
+    --input-dir data/examples/outputs/ \
+    --output-dir-base data/examples/outputs/ # validated outputs will be written to <output-dir-base>/validated/
 ```
-
 
 #### Interactive Chat Mode
 
-To review and refine Q&A pairs interactively, you can use the `chat` subcommand:
+This is an experimental feature that allows you to interact with the Q&A generation and review process in a chat-like manner. You can use this mode to ask questions, request clarifications, or provide feedback on the generated Q&A pairs.
+
+To review and refine Q&A pairs interactively, use the `chat` subcommand:
 
 ```bash
-agentic-doc-qa chat "data/local/microbio-rag/raw_data/Packungsbeilagen Bakteriologie/Anaerotest.pdf" \
-    --output-dir "data/local/agentic-doc-qa/test" \
+agentic-doc-qa chat "data/examples/raw/1706.03762v7.pdf" \
+    --output-dir "data/examples/outputs/" \
     --n-candidates 2 \
-    --model-name "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4" \
-    --domain-config "configs/domains/microbio_preanalytical.yaml"
+    --model-name "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8" 
 ```
 
-
 ### Domain-specific Support
+
+Q&A generation is aided by domain-specific configuration files, which can be specified using the `--domain-config` argument. See the `configs/domains/` directory for examples of domain configurations.
 
 We provide a domain configurations through YAML files in the `configs/domains/` directory. Each configurations defines domain-specific rules, prompts, and other parameters to guide the generation and review of Q&A pairs. By default, the system uses a base domain configuration, but allows for domain-specific overrides, meaning that you don't have redefine default behavior for every domain. See the current domain configurations for examples of how to define domain-specific rules and prompts.
 

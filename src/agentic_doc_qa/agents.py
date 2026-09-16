@@ -4,13 +4,31 @@
 
 from pathlib import Path
 from dataclasses import dataclass, field, replace
+from enum import StrEnum
 
+from pydantic import create_model
 from pydantic_ai import Agent, BinaryContent, RunContext
 from pydantic_ai.models import Model
 
 from agentic_doc_qa.documents import Chunk
 from agentic_doc_qa.domains import DomainConfig
-from agentic_doc_qa.schemas import JudgedQAPair, QAJudgement, QAPairs
+from agentic_doc_qa.schemas import JudgedQAPair, QAJudgement, QAPair, QAPairs
+
+
+def _build_generation_output_type(domain_cfg: DomainConfig) -> type[QAPairs]:
+    """Build a QAPairs subclass whose question_type/question_level fields are
+    constrained to an Enum of the domain's configured names, so pydantic-ai
+    turns them into a JSON-schema `enum` the LLM must pick from. Built from
+    domain_cfg.question_types/difficulty_levels to avoid any drift from the
+    type/difficulty definitions in the prompt text."""
+    question_type_enum = StrEnum("QuestionType", {name: name for name in domain_cfg.question_types})
+    question_level_enum = StrEnum("QuestionLevel", {name: name for name in domain_cfg.difficulty_levels})
+    domain_qa_pair = create_model(
+        "DomainQAPair", __base__=QAPair,
+        question_type=(question_type_enum, ...),
+        question_level=(question_level_enum, ...),
+    )
+    return create_model("DomainQAPairs", __base__=QAPairs, pairs=(list[domain_qa_pair], ...))
 
 
 @dataclass
@@ -39,7 +57,7 @@ def build_generation_agent(model: Model, domain_cfg: DomainConfig, n_candidates:
         deps_type=GenerationDeps,
         instructions=domain_cfg.generation_instructions.format(n_candidates=n_candidates),
         model_settings=domain_cfg.generation_settings,
-        output_type=QAPairs,
+        output_type=_build_generation_output_type(domain_cfg),
     )
 
     @generation_agent.instructions

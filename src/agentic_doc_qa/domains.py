@@ -15,6 +15,8 @@ BASE_CONFIG_PATH = Path(__file__).parent.parent.parent / "configs" / "domains" /
 @dataclass
 class DomainConfig:
     domain: str
+    question_types: dict[str, str]      # name -> description; single source of truth for the taxonomy
+    difficulty_levels: dict[str, str]   # name -> description
     generation_instructions: str        # includes {n_candidates} placeholder, unfilled
     generation_vision_addendum: str      # empty string if none
     generation_settings: dict[str, Any]
@@ -23,14 +25,21 @@ class DomainConfig:
     judge_settings: dict[str, Any]
 
 
+def _render_definitions_block(definitions: dict[str, str]) -> str:
+    """Renders a block of definitions (question types or difficulty levels) as a Markdown list for inclusion in the prompt text."""
+    return "\n".join(f'- "{name}": {description}' for name, description in definitions.items())
+
+
 def _load_yaml(path: Path) -> dict[str, Any]:
+    """Load a YAML file from the given path, returning an empty dict if the file does not exist."""
     if not path.exists():
         return {}
     return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
 
 def load_domain_config(configs_path: Path | None) -> DomainConfig:
-    
+    """Load the domain configuration from the given YAML file path, merging it with the base config."""
+
     # load the base config
     base = _load_yaml(BASE_CONFIG_PATH)
     logger.debug(f"Loaded base domain config from {BASE_CONFIG_PATH}: {base}")
@@ -46,10 +55,15 @@ def load_domain_config(configs_path: Path | None) -> DomainConfig:
     domain_base = base.get("domain", "base")
     domain_override = override.get("domain", domain_base)
 
+    question_types = {**base.get("question_types", {}), **override.get("question_types", {})}
+    difficulty_levels = {**base.get("difficulty_levels", {}), **override.get("difficulty_levels", {})}
+
     gen_base = base.get("generation", {})
     gen_override = override.get("generation", {})
 
     instructions = gen_base.get("instructions", "")
+    instructions = instructions.replace("{question_types_block}", _render_definitions_block(question_types))
+    instructions = instructions.replace("{difficulty_levels_block}", _render_definitions_block(difficulty_levels))
     addendum = gen_override.get("instructions_addendum")
     if addendum:
         example_questions = gen_override.get("example_questions")
@@ -68,6 +82,8 @@ def load_domain_config(configs_path: Path | None) -> DomainConfig:
 
     return DomainConfig(
         domain=domain_override,
+        question_types=question_types,
+        difficulty_levels=difficulty_levels,
         generation_instructions=instructions,
         generation_vision_addendum=gen_base.get("vision_addendum", ""),
         generation_settings={**gen_base.get("model_settings", {}), **gen_override.get("model_settings", {})},

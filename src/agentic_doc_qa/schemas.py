@@ -9,23 +9,18 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class QAType(str, Enum):
-    FACTOID = "factoid"
-    DEFINITION = "definition"
-    YESNO = "yes-no"
-    SUMMARY = "summary"
-
-class QALevel(str, Enum):
-    EASY = "easy"
-    MEDIUM = "medium"
-    HARD = "hard"
-    IMPOSSIBLE = "impossible"
-
 class QAPair(BaseModel):
+    """question_type/question_level are open strings rather than a fixed
+    Enum: the set of valid values is domain-config-driven (see
+    configs/domains/_base.yaml's question_types/difficulty_levels and
+    agents.build_generation_agent, which builds a per-domain Enum-constrained
+    subclass for the generation agent's structured output). Keeping this
+    shared/persisted model unconstrained means it can load records written
+    under any domain's taxonomy, past or present."""
     question: str
     answer: str
-    question_type: QAType
-    question_level: QALevel
+    question_type: str
+    question_level: str
 
 class QAPairs(BaseModel):
     pairs: list[QAPair] = Field(default_factory=list)

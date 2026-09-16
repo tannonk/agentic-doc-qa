@@ -1,0 +1,19 @@
+{
+  "answer": "The relative specificity (95.45%) is slightly higher than the relative sensitivity (94.00%).",
+  "judgement": {
+    "decision": "accept",
+    "rationale": "The performance table lists relative specificity 95.45% and relative sensitivity 94.00%; the answer correctly states that specificity is slightly higher.",
+    "score": 6
+  },
+  "metadata": {
+    "chunk_index": 0,
+    "pages": [
+      1,
+      4
+    ],
+    "source_path": "data/examples/raw/6b2275c87add.pdf"
+  },
+  "question": "How does the relative specificity (95.45%) of the STANDARD F H. pylori Ag FIA test compare to its relative sensitivity (94.00%)?",
+  "question_level": "medium",
+  "question_type": "comparison"
+}
