@@ -26,6 +26,12 @@ Example usage:
         --domain-config "configs/domains/swissdox.yaml" \
         --model-name "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4"
 
+    python -m agentic_doc_qa.cli generate \
+            "data/local/md/Lecture_Slides/resolved/captioned/fdf46a76adf1.md" \
+            --output-dir-base "data/examples/outputs/" \
+            --domain-config "configs/domains/microbio_preanalytical.yaml" \
+            --model-name "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8"
+    
     # For batch generation of multiple PDFs in a directory, e.g. for the "Packungsbeilagen Bakteriologie" dataset:
     for pdf in "data/local/microbio-rag/raw_data/Packungsbeilagen Bakteriologie"/*.pdf; do
         python -m agentic_doc_qa.cli generate ${pdf} \
@@ -91,6 +97,7 @@ def _add_output_dir_arg(p: argparse.ArgumentParser) -> None:
         "For generation, a subdirectory will be created based on "
         "the source document's stem, e.g. <output-dir-base>/<source-stem>/001.json, 002.json, etc."
         "For review/chat/web, this output directory will <output-dir-base>/validated/<source-stem>/001.json, 002.json, etc.")
+
 
 def build_arg_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="agentic-doc-qa")

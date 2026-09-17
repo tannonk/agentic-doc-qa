@@ -70,16 +70,16 @@ def test_split_front_matter_non_mapping():
     assert body == "Body."
 
 
-def test_load_chunks_markdown_sends_raw_text_unstripped(tmp_path):
-    """Loading a markdown file should split off front matter metadata, produce one chunk with the stripped body, and derive a stable source ID from the raw file content."""
+def test_load_chunks_markdown_sends_content_text(tmp_path):
+    """Loading a markdown file should split off front matter metadata, produce one chunk with the stripped body content."""
     content = "Body text here."
     raw = f"---\nmedium_name: Example Times\npubtime: 2026-01-01\n---\n\n{content}\n"
     source_path = tmp_path / "doc.md"
     source_path.write_text(raw, encoding="utf-8")
     chunks, metadata, source_id = load_chunks(source_path)
-
+    
     assert len(chunks) == 1
-    assert chunks[0] == Chunk(index=0, content=raw.strip())
+    assert chunks[0] == Chunk(index=0, content=content.strip(), pages=(1, 1))
     assert metadata == {
         "source_path": str(source_path),
         "pubtime": date(2026, 1, 1),
@@ -181,11 +181,25 @@ def test_load_chunks_samples_max_chunks(tmp_path):
     assert len({chunk.index for chunk in chunks}) == 2
 
 
-def test_load_chunks_markdown_has_no_page_range(tmp_path):
-    """Chunks from a non-PDF source (markdown) should have no page range, since pages don't apply."""
+def test_load_chunks_markdown_has_page_range(tmp_path):
+    """Chunks from a markdown source with no page breaks should have (1, 1) page range."""
     source_path = tmp_path / "doc.md"
     source_path.write_text("Body text.\n", encoding="utf-8")
 
     chunks, _, _ = load_chunks(source_path)
 
-    assert chunks[0].pages is None
+    assert chunks[0].pages == (1, 1)
+
+
+def test_load_chunks_markdown_has_page_range_with_page_breaks(tmp_path):
+    """Chunks from a markdown source with page breaks should have correct page ranges."""
+    source_path = tmp_path / "doc.md"
+    source_path.write_text(
+        "<!-- page 1 -->\nFirst page.\n<!-- page 2 -->\nSecond page.\n", encoding="utf-8"
+    )
+
+    chunks, _, _ = load_chunks(source_path)
+
+    assert len(chunks) == 2
+    assert chunks[0].pages == (1, 2)
+    assert chunks[1].pages == (2, 2)

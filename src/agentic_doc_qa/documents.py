@@ -28,7 +28,6 @@ import frontmatter
 import pypdfium2 as pdfium
 from pydantic_ai import BinaryContent
 
-SUPPORTED_TEXT_SUFFIXES = {".txt", ".md"}
 
 random.seed(42)  # for reproducible chunk sampling when max_chunks is set
 
@@ -63,13 +62,8 @@ def load_chunks(
         "source_path": str(file_path),
     }
 
-    if file_path.suffix in SUPPORTED_TEXT_SUFFIXES:
-        post = frontmatter.load(file_path)
-        # include front matter in the chunk content so that the generation agent can use it to produce metadata-aware questions
-        metadata.update(post.metadata)
-        if post.metadata:
-            post.content = f"---\n{yaml.dump(post.metadata, allow_unicode=True)}---\n\n" + post.content
-        chunks = [Chunk(index=0, content=post.content)]
+    if file_path.suffix in ".md":
+        chunks, metadata = _load_markdown_chunks(file_path, metadata)
 
     elif file_path.suffix == ".pdf":
         if vision:
@@ -194,3 +188,35 @@ def _load_pdf_chunks(file_path: Path, pages_per_chunk: int, image_scale: float) 
             content.append(BinaryContent(data=png_bytes, media_type="image/png"))
         chunks.append(Chunk(index=chunk_index, content=content, pages=(start + 1, end)))
     return chunks
+
+
+def _load_markdown_chunks(file_path: Path, metadata: dict[str, str]) -> tuple[list[Chunk], dict[str, str]]:
+    """Load a Markdown file with optional front matter and split it into chunks based 
+    on page breaks (e.g. <!-- page 9 -->) if present, or as a single chunk otherwise."""
+    
+    import re
+    page_break_pattern = re.compile(r"<!--\s*page\s+(\d+)\s*-->")
+    
+    # include front matter in the chunk content so that the generation agent can use it to produce metadata-aware questions
+    post = frontmatter.load(file_path)
+
+    # Update metadata with front matter if present
+    if post.metadata:
+        metadata.update(post.metadata)
+        
+    # split the content into chunks based on page breaks if present
+    chunks = []
+    if page_break_pattern.search(post.content):
+        pages = page_break_pattern.findall(post.content)
+        for i, page in enumerate(pages):
+            start_index = post.content.find(f"<!-- page {page} -->")
+            end_index = post.content.find(f"<!-- page {int(page) + 1} -->", start_index)
+            if end_index == -1:
+                end_index = len(post.content)
+            chunk_content = post.content[start_index+len(f"<!-- page {page} -->"):end_index].strip()
+            if chunk_content:  # only add non-empty chunks
+                chunks.append(Chunk(index=i, content=chunk_content, pages=(int(page), len(pages))))
+    else:
+        chunks = [Chunk(index=0, content=post.content, pages=(1, 1))]  # single chunk with the entire content
+
+    return chunks, metadata
