@@ -67,6 +67,9 @@ def _add_generation_args(p: argparse.ArgumentParser) -> None:
             "will end up with more total Q&A pairs (default: %(default)s).")
     p.add_argument("--pages-per-chunk", type=int, default=4,
         help="For .pdf sources, number of pages to render per chunk (default: %(default)s).")
+    p.add_argument("--follow-up-depth", type=int, default=0,
+        help="Number of follow-up turns to generate per accepted top-level QA pair, each "
+            "digging deeper into the same chunk (default: %(default)s, disabled).")
 
 def _add_logging_args(p: argparse.ArgumentParser) -> None:
     """Add logging-related arguments to the given ArgumentParser."""
@@ -111,9 +114,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
 async def _generate_async(args) -> None:
     """Mirrors old generate.py's run(): load_domain_config, load_chunks, loop
     chunks through pipeline.propose_qa_pairs(), write to --output-dir via
-    pipeline.save_qa_pairs().
+    pipeline.save_qa_pairs(). Each accepted top-level pair is saved
+    immediately, then --follow-up-depth more turns are generated and saved
+    one at a time, each chained off the previous turn's top-ranked pair --
+    save_qa_pairs() hands back the id it assigned, which is exactly what the
+    next turn needs to link itself as a follow-up.
     """
-    
+
     from agentic_doc_qa.models import build_model
     from agentic_doc_qa.documents import load_chunks
     from agentic_doc_qa.domains import load_domain_config
@@ -121,7 +128,7 @@ async def _generate_async(args) -> None:
 
     # load the domain config if provided, else None (pipeline.propose_qa_pairs() will handle None by falling back to base)
     domain_cfg = load_domain_config(args.domain_config)
-    
+
     if not args.source.exists():
         raise FileNotFoundError(f"Source document not found: {args.source}")
 
@@ -131,18 +138,40 @@ async def _generate_async(args) -> None:
     # initalize the model
     model = build_model(args.model_name, base_url=args.base_url, api_key=args.api_key)
 
-    qa_pairs = []
     for chunk in tqdm(chunks):
-        chunk_qa_pairs = await propose_qa_pairs(
+        root_pairs = await propose_qa_pairs(
             model=model,
             domain_cfg=domain_cfg,
             chunk=chunk,
             n_candidates=args.n_candidates,
             total_chunks=len(chunks),
         )
-        qa_pairs.extend((chunk_qa_pairs, chunk) for chunk_qa_pairs in chunk_qa_pairs)
+        for root in root_pairs:
+            written = save_qa_pairs(
+                accepted=[(root, chunk, None)], source_id=source_id, metadata=metadata,
+                output_dir_base=args.output_dir_base,
+            )
+            parent, parent_id = root, written[0][1]
+            avoid_questions = [root.pair.question]
 
-    save_qa_pairs(accepted=qa_pairs, source_id=source_id, metadata=metadata, output_dir_base=args.output_dir_base)
+            for _ in range(args.follow_up_depth):
+                follow_ups = await propose_qa_pairs(
+                    model=model,
+                    domain_cfg=domain_cfg,
+                    chunk=chunk,
+                    n_candidates=args.n_candidates,
+                    parent_pair=parent.pair,
+                    avoid_questions=avoid_questions,
+                    total_chunks=len(chunks),
+                )
+                if not follow_ups:
+                    break
+                written = save_qa_pairs(
+                    accepted=[(fp, chunk, parent_id) for fp in follow_ups], source_id=source_id,
+                    metadata=metadata, output_dir_base=args.output_dir_base,
+                )
+                parent, parent_id = follow_ups[0], written[0][1]  # chain the top-ranked one forward
+                avoid_questions.extend(fp.pair.question for fp in follow_ups)
 
     return
 

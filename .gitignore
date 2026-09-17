@@ -225,5 +225,7 @@ data/local
 .claude/settings.local.json 
 docs/
 scratch/
+data/examples/outputs/
 
 uv.lock
+

@@ -38,6 +38,7 @@ class GenerationDeps:
     feedback: str | None = None
     reviewer_feedback: str | None = None
     existing_questions: list[str] = field(default_factory=list)
+    parent_pair: QAPair | None = None
 
 
 def build_judge_agent(model: Model, domain_cfg: DomainConfig) -> Agent:
@@ -96,6 +97,18 @@ def build_generation_agent(model: Model, domain_cfg: DomainConfig, n_candidates:
             f"Do NOT repeat or closely paraphrase them; cover different content instead:\n{listing}"
         )
 
+    @generation_agent.instructions
+    def add_follow_up_instructions(ctx: RunContext[GenerationDeps]) -> str:
+        if ctx.deps.parent_pair is None:
+            return ""
+        return (
+            f"This is a follow-up round. The reviewer already has this accepted QA pair for "
+            f"this chunk:\nQ: {ctx.deps.parent_pair.question}\nA: {ctx.deps.parent_pair.answer}\n\n"
+            f"Write question(s) that meaningfully build on or dig deeper into this answer using "
+            f"the same passage -- do not just rephrase it, and do not ask an unrelated question "
+            f"from the same chunk."
+        )
+
     return generation_agent
 
 
@@ -115,6 +128,10 @@ Workflow:
   etc.), call `propose` again for the SAME chunk_index, passing their feedback verbatim as `reviewer_feedback`.
   Never edit, rewrite, or fabricate a corrected pair yourself -- only a fresh `propose` call is judge-vetted.
 - If the reviewer says to move on / the chunk is done, call `propose` for chunk_index + 1.
+- If the reviewer asks to go deeper on / follow up on the pair they most recently saved for a chunk, call
+  `propose` again for that chunk_index with `follow_up=True` instead of a fresh batch. This only works against
+  the most recently SAVED pair for that chunk -- if it errors because nothing's been saved yet, tell the
+  reviewer to save a pair first.
 - Once every chunk has been covered, tell the reviewer the document is fully reviewed.
 """
 
@@ -137,6 +154,8 @@ def build_doc_qa_agent(
     last_proposals: dict[int, list[JudgedQAPair]] = {}  # chunk_index -> judge-accepted JudgedQAPair list, most recent proposal only
     chunk_seen_questions: dict[int, set[str]] = {}  # chunk_index -> every question text shown so far, across all propose() rounds
     saved_counts: dict[int, int] = {}  # chunk_index -> number of pairs saved so far
+    last_saved: dict[int, tuple[JudgedQAPair, str]] = {}  # chunk_index -> (most recently saved pair, its assigned id)
+    pending_parent_id: dict[int, str | None] = {}  # chunk_index -> parent id for whatever's currently in last_proposals[chunk_index]
 
     @doc_qa_agent.tool_plain
     def document_info() -> str:
@@ -145,24 +164,37 @@ def build_doc_qa_agent(
 
     @doc_qa_agent.tool_plain
     async def propose(
-        chunk_index: int, n_candidates: int = default_n_candidates, reviewer_feedback: str | None = None
+        chunk_index: int, n_candidates: int = default_n_candidates, reviewer_feedback: str | None = None,
+        follow_up: bool = False,
     ) -> list[dict] | str:
         """Generate and judge-gate candidates for one chunk. Returns only
         judge-accepted pairs -- this is the ONLY way candidates enter the
         conversation, so the invariant holds by construction. Pass
         reviewer_feedback when the reviewer asked for a different/better
-        batch of the same chunk."""
+        batch of the same chunk. Pass follow_up=True to generate questions
+        that dig deeper into the most recently SAVED pair for this chunk
+        instead of a fresh batch -- there must already be a saved pair for
+        this chunk, or this returns an error."""
         if not (0 <= chunk_index < len(chunks)):
             return f"There is no chunk {chunk_index}. This document has {len(chunks)} chunk(s) (indexes 0-{len(chunks) - 1})."
+
+        parent_pair, parent_id = None, None
+        if follow_up:
+            saved = last_saved.get(chunk_index)
+            if saved is None:
+                return f"No pair has been saved yet for chunk {chunk_index}; save one before asking for a follow-up."
+            parent_pair, parent_id = saved[0].pair, saved[1]
 
         avoid_questions = sorted(chunk_seen_questions.get(chunk_index, set()))
         accepted = await propose_qa_pairs(
             model, domain_cfg, chunks[chunk_index], n_candidates,
             reviewer_feedback=reviewer_feedback,
             avoid_questions=avoid_questions,
-            total_chunks=len(chunks)
+            total_chunks=len(chunks),
+            parent_pair=parent_pair,
         )
         last_proposals[chunk_index] = accepted
+        pending_parent_id[chunk_index] = parent_id
         chunk_seen_questions.setdefault(chunk_index, set()).update(jp.pair.question for jp in accepted)
         return [jp.model_dump() for jp in accepted]
 
@@ -173,11 +205,16 @@ def build_doc_qa_agent(
         to keep IS the approval decision, so no separate pending state or log
         is needed here."""
         pairs = [last_proposals[chunk_index][i] for i in pair_indexes]
-        written = save_qa_pairs([(p, chunks[chunk_index]) for p in pairs], source_id, metadata, approved_dir)
-        for path in written:
+        parent_id = pending_parent_id.get(chunk_index)
+        written = save_qa_pairs(
+            [(p, chunks[chunk_index], parent_id) for p in pairs], source_id, metadata, approved_dir
+        )
+        for path, _ in written:
             record = review_io.load_record(path)
             review_io.approve(record, path, approved_dir, approved_dir)
+        if pairs:
+            last_saved[chunk_index] = (pairs[-1], written[-1][1])
         saved_counts[chunk_index] = saved_counts.get(chunk_index, 0) + len(written)
-        return f"Saved {len(written)} pair(s): {', '.join(p.name for p in written)}."
+        return f"Saved {len(written)} pair(s): {', '.join(path.name for path, _ in written)}."
 
     return doc_qa_agent

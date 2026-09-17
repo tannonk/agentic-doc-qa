@@ -1,7 +1,7 @@
 import json
 
 from agentic_doc_qa.documents import Chunk
-from agentic_doc_qa.pipeline import _summarize_rejections, save_qa_pairs, select_accepted, select_ranked
+from agentic_doc_qa.pipeline import _build_judge_user_content, _summarize_rejections, save_qa_pairs, select_accepted, select_ranked
 from agentic_doc_qa.schemas import JudgedQAPair, QAJudgement, QAPair, QAVerdict, QAVerdictDecision
 
 
@@ -68,17 +68,42 @@ def test_summarize_rejections_includes_only_non_accepted_with_rationale():
     assert '"dropped" was rejected (reject_too_easy): too trivial' in summary
 
 
+def test_build_judge_user_content_includes_parent_context_for_follow_ups():
+    """When judging follow-up candidates, the judge must be shown the parent pair and told to reject non-deepening candidates."""
+    chunk = Chunk(index=0, content="Some passage.")
+    candidates = [_pair("follow-up Q")]
+    parent = _pair("root Q")
+
+    content = _build_judge_user_content(chunk, candidates, parent_pair=parent)
+
+    assert "root Q" in content
+    assert "follow-up" in content.lower()
+
+
+def test_build_judge_user_content_omits_parent_block_by_default():
+    """Without a parent_pair, the judge content should read exactly as it did before follow-ups existed."""
+    chunk = Chunk(index=0, content="Some passage.")
+    candidates = [_pair("Q1")]
+
+    content = _build_judge_user_content(chunk, candidates)
+
+    assert "follow-up" not in content.lower()
+
+
 def test_save_qa_pairs_writes_numbered_files_with_provenance(tmp_path):
-    """Each accepted pair should be written as a numbered JSON file carrying the source metadata plus its chunk's provenance (index and, for PDFs, page range)."""
+    """Each accepted pair should be written as a numbered JSON file carrying the source metadata plus its chunk's provenance (index and, for PDFs, page range), plus its own assigned id."""
     chunk = Chunk(index=2, content="text", pages=(5, 6))
     verdict = QAVerdict(candidate_index=0, decision=QAVerdictDecision.ACCEPT, score=7, rationale="good")
     judged = JudgedQAPair(pair=_pair("Q1"), verdict=verdict)
 
-    written = save_qa_pairs([(judged, chunk)], source_id="doc123", metadata={"title": "Example"}, output_dir_base=tmp_path)
+    written = save_qa_pairs([(judged, chunk, None)], source_id="doc123", metadata={"title": "Example"}, output_dir_base=tmp_path)
 
-    assert written == [tmp_path / "doc123" / "001.json"]
-    data = json.loads(written[0].read_text(encoding="utf-8"))
-    assert data["metadata"] == {"title": "Example", "chunk_index": 2, "pages": [5, 6]}
+    assert [path for path, _ in written] == [tmp_path / "doc123" / "001.json"]
+    path, record_id = written[0]
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert data["metadata"]["id"] == record_id
+    assert "parent_id" not in data["metadata"]
+    assert {k: v for k, v in data["metadata"].items() if k != "id"} == {"title": "Example", "chunk_index": 2, "pages": [5, 6]}
     assert data["judgement"]["score"] == 7
 
 
@@ -88,7 +113,25 @@ def test_save_qa_pairs_appends_to_existing_numbering(tmp_path):
     verdict = QAVerdict(candidate_index=0, decision=QAVerdictDecision.ACCEPT, score=5, rationale="ok")
     judged = JudgedQAPair(pair=_pair("Q1"), verdict=verdict)
 
-    save_qa_pairs([(judged, chunk)], source_id="doc123", metadata={}, output_dir_base=tmp_path)
-    second = save_qa_pairs([(judged, chunk)], source_id="doc123", metadata={}, output_dir_base=tmp_path)
+    save_qa_pairs([(judged, chunk, None)], source_id="doc123", metadata={}, output_dir_base=tmp_path)
+    second = save_qa_pairs([(judged, chunk, None)], source_id="doc123", metadata={}, output_dir_base=tmp_path)
 
-    assert second == [tmp_path / "doc123" / "002.json"]
+    assert [path for path, _ in second] == [tmp_path / "doc123" / "002.json"]
+
+
+def test_save_qa_pairs_records_parent_id_for_follow_ups(tmp_path):
+    """A follow-up pair's saved metadata must link back to its parent's assigned id, so a thread can be reconstructed."""
+    chunk = Chunk(index=0, content="text")
+    verdict = QAVerdict(candidate_index=0, decision=QAVerdictDecision.ACCEPT, score=5, rationale="ok")
+    root = JudgedQAPair(pair=_pair("root question"), verdict=verdict)
+    follow_up = JudgedQAPair(pair=_pair("follow-up question"), verdict=verdict)
+
+    [(_, root_id)] = save_qa_pairs([(root, chunk, None)], source_id="doc123", metadata={}, output_dir_base=tmp_path)
+    [(follow_up_path, follow_up_id)] = save_qa_pairs(
+        [(follow_up, chunk, root_id)], source_id="doc123", metadata={}, output_dir_base=tmp_path
+    )
+
+    data = json.loads(follow_up_path.read_text(encoding="utf-8"))
+    assert data["metadata"]["parent_id"] == root_id
+    assert data["metadata"]["id"] == follow_up_id
+    assert follow_up_id != root_id

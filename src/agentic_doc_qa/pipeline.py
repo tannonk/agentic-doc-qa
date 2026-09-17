@@ -2,6 +2,7 @@
 #-*- coding: utf-8 -*-
 
 import json
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -15,13 +16,21 @@ from agentic_doc_qa.schemas import JudgedQAPair, QAJudgement, QAPair, QAVerdictD
 
 
 def _build_judge_user_content(
-    chunk: Chunk, candidates: list[QAPair], avoid_questions: list[str] | None = None
+    chunk: Chunk, candidates: list[QAPair], avoid_questions: list[str] | None = None,
+    parent_pair: QAPair | None = None,
 ) -> str | list:
     listing = "\n".join(
         f"[{i}] Q: {c.question} A: {c.answer} (type={c.question_type}, level={c.question_level})"
         for i, c in enumerate(candidates)
     )
     listing_block = f"Candidate QA pairs to judge:\n{listing}"
+    if parent_pair is not None:
+        listing_block = (
+            f"These candidates are follow-ups to an already-accepted pair for this chunk:\n"
+            f"Q: {parent_pair.question}\nA: {parent_pair.answer}\n\n"
+            f"Reject any candidate that just restates this pair or asks something unrelated "
+            f"from the same chunk instead of meaningfully building on it.\n\n"
+        ) + listing_block
     if avoid_questions:
         avoid_block = "\n".join(f"- {q}" for q in avoid_questions)
         listing_block += (
@@ -83,6 +92,7 @@ async def propose_qa_pairs(
     reviewer_feedback: str | None = None,
     avoid_questions: list[str] | None = None,
     total_chunks: int | None = None,
+    parent_pair: QAPair | None = None,
 ) -> list[JudgedQAPair]:
     """Generate, judge, and — if anything was rejected — regenerate once with
     the judge's feedback, then judge again. Every accepted pair from both
@@ -99,6 +109,10 @@ async def propose_qa_pairs(
     an earlier propose_qa_pairs() call (e.g. an earlier round in the same
     chat session) — both the generation agent and the judge are told not to
     repeat/accept duplicates of these.
+    parent_pair: an already-accepted QAPair for this chunk to follow up on.
+    When set, the generation agent is asked to write a question that digs
+    deeper into this pair's answer using the same chunk, and the judge is
+    asked to reject candidates that don't meaningfully build on it.
     """
     generation_agent = build_generation_agent(model, domain_cfg, n_candidates=n_candidates)
     logger.debug(f"Initialized generation agent with instructions:\n\n{get_agent_instructions(generation_agent)}")
@@ -112,6 +126,7 @@ async def propose_qa_pairs(
         n_candidates=n_candidates,
         reviewer_feedback=reviewer_feedback,
         existing_questions=avoid_questions,
+        parent_pair=parent_pair,
     )
     pool: list[JudgedQAPair] = []
     current_usage = None
@@ -125,7 +140,7 @@ async def propose_qa_pairs(
         logger.info(f"Current usage after generation iteration {attempt + 1}: {current_usage}")
 
         judgement_result = await judge_agent.run(
-            _build_judge_user_content(chunk, candidates, avoid_questions), usage=current_usage
+            _build_judge_user_content(chunk, candidates, avoid_questions, parent_pair), usage=current_usage
         )
         current_usage = judgement_result.usage # update usage for next attempt
         logger.info(f"Current usage after judging iteration {attempt + 1}: {current_usage}")
@@ -149,7 +164,7 @@ async def propose_qa_pairs(
     logger.info(f"Pool has {len(pool)} candidates for chunk {chunk.index}; running final validation to pick top {n_candidates}")
     pool_pairs = [jp.pair for jp in pool]
     final_judgement = await judge_agent.run(
-        _build_judge_user_content(chunk, pool_pairs, avoid_questions), usage=current_usage
+        _build_judge_user_content(chunk, pool_pairs, avoid_questions, parent_pair), usage=current_usage
     )
 
     logger.info(f"Current usage after final validation: {final_judgement.usage}")
@@ -158,33 +173,42 @@ async def propose_qa_pairs(
 
 
 def save_qa_pairs(
-    accepted: list[tuple[JudgedQAPair, Chunk]],
+    accepted: list[tuple[JudgedQAPair, Chunk, str | None]],
     source_id: str,
     metadata: dict[str, Any],
     output_dir_base: Path,
-) -> list[Path]:
+) -> list[tuple[Path, str]]:
     """Write each accepted pair to its own numbered JSON file under
     output_dir_base/source_id/. Numbering continues from whatever's already
     in that directory, so calling this more than once for the same source_id
-    (e.g. one save per chunk in an interactive chat session) appends rather
-    than overwriting earlier saves. Returns the list of files written, in
-    the same order as `accepted`."""
-    written: list[Path] = []
+    (e.g. one save per chunk in an interactive chat session, or one save per
+    follow-up turn) appends rather than overwriting earlier saves.
+
+    Each item's third element is the id of the pair it follows up on
+    (metadata["parent_id"]), or None for a standalone/root pair. Every pair
+    written is assigned its own metadata["id"], independent of its filename,
+    so a follow-up chain can be reconstructed even if files are renamed.
+
+    Returns (file written, assigned id) for each pair, in the same order as
+    `accepted`."""
+    written: list[tuple[Path, str]] = []
 
     output_dir = output_dir_base / f"{source_id}"
     output_dir.mkdir(parents=True, exist_ok=True)
-    start_index = len(list(output_dir.glob("*.json")))
-
-    for offset, (judged, chunk) in enumerate(accepted):
+    
+    for judged, chunk, parent_id in accepted:
         qa_pair = judged.pair
-        output_filename = output_dir / f"{start_index + offset + 1:03d}.json"
+        record_id = uuid.uuid4().hex
+        output_filename = output_dir / f"{record_id}.json"
         if output_filename.exists():
             logger.warning(f"Output file {output_filename} already exists. Overwriting.")
 
         # per-pair copy: chunk provenance differs between pairs of the same document
-        pair_metadata = {**metadata, "chunk_index": chunk.index}
+        pair_metadata = {**metadata, "chunk_index": chunk.index, "id": record_id}
         if chunk.pages is not None:
             pair_metadata["pages"] = list(chunk.pages)
+        if parent_id is not None:
+            pair_metadata["parent_id"] = parent_id
         with open(output_filename, "w", encoding="utf-8") as f:
             # combine the QA pair with the metadata for this source document
             combined_data = {
@@ -200,7 +224,7 @@ def save_qa_pairs(
                 },
             }
             f.write(json.dumps(combined_data, indent=2, ensure_ascii=False, sort_keys=True))
-        written.append(output_filename)
+        written.append((output_filename, record_id))
 
     logger.info(f"Saved {len(written)} accepted QA pairs to {output_dir}")
 
