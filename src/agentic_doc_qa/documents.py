@@ -16,6 +16,7 @@ import base64
 import yaml
 import hashlib
 import io
+import random
 from dataclasses import dataclass
 from os import path
 from pathlib import Path
@@ -29,6 +30,7 @@ from pydantic_ai import BinaryContent
 
 SUPPORTED_TEXT_SUFFIXES = {".txt", ".md"}
 
+random.seed(42)  # for reproducible chunk sampling when max_chunks is set
 
 @dataclass
 class Chunk:
@@ -44,7 +46,8 @@ def load_chunks(
     vision: bool = True,
     pages_per_chunk: int = 5,
     image_scale: float = 2.0,
-    hash_len: int = 12
+    hash_len: int = 12,
+    max_chunks: int | None = None
 ) -> tuple[list[Chunk], dict[str, Any], str]:
     """Load a source document into one or more generation-ready chunks.
 
@@ -56,26 +59,35 @@ def load_chunks(
     with open(file_path, "rb") as f:
         source_id = hashlib.file_digest(f, "sha256").hexdigest()[:hash_len]
 
+    metadata = {
+        "source_path": str(file_path),
+    }
+
     if file_path.suffix in SUPPORTED_TEXT_SUFFIXES:
         post = frontmatter.load(file_path)
         # include front matter in the chunk content so that the generation agent can use it to produce metadata-aware questions
+        metadata.update(post.metadata)
         if post.metadata:
             post.content = f"---\n{yaml.dump(post.metadata, allow_unicode=True)}---\n\n" + post.content
-        return [Chunk(index=0, content=post.content)], post.metadata, source_id
+        chunks = [Chunk(index=0, content=post.content)]
 
     elif file_path.suffix == ".pdf":
-        metadata = {
-            "source_path": str(file_path),
-        }
         if vision:
             chunks = _load_pdf_chunks(file_path, pages_per_chunk, image_scale)
         else:
             chunks = _load_other_chunks_as_text(file_path)
-        return chunks, metadata, source_id
 
     else:
         chunks = _load_other_chunks_as_text(file_path)  # fallback to text conversion for unknown suffixes
-        return chunks, {"source_path": str(file_path)}, source_id
+    
+    if max_chunks is not None and len(chunks) > max_chunks:
+        original_chunk_count = len(chunks)
+        # sample evenly spaced chunks from the full list
+        sample_indices = random.sample(range(len(chunks)), max_chunks)
+        chunks = [chunks[i] for i in sorted(sample_indices)]
+        logger.debug(f"Sampled {len(chunks)} chunks from {file_path} (originally {original_chunk_count} chunks).")
+
+    return chunks, metadata, source_id
 
 
 def _page_chunk_ranges(total_pages: int, pages_per_chunk: int) -> list[tuple[int, int]]:

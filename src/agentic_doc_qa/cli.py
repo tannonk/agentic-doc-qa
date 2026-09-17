@@ -67,6 +67,10 @@ def _add_generation_args(p: argparse.ArgumentParser) -> None:
             "will end up with more total Q&A pairs (default: %(default)s).")
     p.add_argument("--pages-per-chunk", type=int, default=4,
         help="For .pdf sources, number of pages to render per chunk (default: %(default)s).")
+    p.add_argument("--max-chunks", type=int, default=4,
+        help="Optional maximum number of chunks to generate per source document. "
+            "If set, a random sample of max_chunks will be selected from the full set of chunks. "
+            "This is useful for testing or debugging on large documents (default: %(default)s).")
     p.add_argument("--follow-up-depth", type=int, default=0,
         help="Number of follow-up turns to generate per accepted top-level QA pair, each "
             "digging deeper into the same chunk (default: %(default)s, disabled).")
@@ -133,7 +137,12 @@ async def _generate_async(args) -> None:
         raise FileNotFoundError(f"Source document not found: {args.source}")
 
     # load the document into chunks, plus metadata and a source_id
-    chunks, metadata, source_id = load_chunks(args.source, vision=not args.no_vision, pages_per_chunk=args.pages_per_chunk)
+    chunks, metadata, source_id = load_chunks(
+        args.source, 
+        vision=not args.no_vision, 
+        pages_per_chunk=args.pages_per_chunk,
+        max_chunks=args.max_chunks
+        )
 
     # initalize the model
     model = build_model(args.model_name, base_url=args.base_url, api_key=args.api_key)

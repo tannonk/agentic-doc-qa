@@ -98,8 +98,8 @@ def test_save_qa_pairs_writes_numbered_files_with_provenance(tmp_path):
 
     written = save_qa_pairs([(judged, chunk, None)], source_id="doc123", metadata={"title": "Example"}, output_dir_base=tmp_path)
 
-    assert [path for path, _ in written] == [tmp_path / "doc123" / "001.json"]
     path, record_id = written[0]
+    assert path == tmp_path / "doc123" / f"{record_id}.json"
     data = json.loads(path.read_text(encoding="utf-8"))
     assert data["metadata"]["id"] == record_id
     assert "parent_id" not in data["metadata"]
@@ -113,10 +113,14 @@ def test_save_qa_pairs_appends_to_existing_numbering(tmp_path):
     verdict = QAVerdict(candidate_index=0, decision=QAVerdictDecision.ACCEPT, score=5, rationale="ok")
     judged = JudgedQAPair(pair=_pair("Q1"), verdict=verdict)
 
-    save_qa_pairs([(judged, chunk, None)], source_id="doc123", metadata={}, output_dir_base=tmp_path)
+    first = save_qa_pairs([(judged, chunk, None)], source_id="doc123", metadata={}, output_dir_base=tmp_path)
     second = save_qa_pairs([(judged, chunk, None)], source_id="doc123", metadata={}, output_dir_base=tmp_path)
 
-    assert [path for path, _ in second] == [tmp_path / "doc123" / "002.json"]
+    first_path, _ = first[0]
+    second_path, second_id = second[0]
+    assert second_path == tmp_path / "doc123" / f"{second_id}.json"
+    assert second_path != first_path
+    assert sorted(p.name for p in (tmp_path / "doc123").iterdir()) == sorted([first_path.name, second_path.name])
 
 
 def test_save_qa_pairs_records_parent_id_for_follow_ups(tmp_path):

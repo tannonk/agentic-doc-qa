@@ -80,7 +80,11 @@ def test_load_chunks_markdown_sends_raw_text_unstripped(tmp_path):
 
     assert len(chunks) == 1
     assert chunks[0] == Chunk(index=0, content=raw.strip())
-    assert metadata == {"pubtime": date(2026, 1, 1), "medium_name": "Example Times"}
+    assert metadata == {
+        "source_path": str(source_path),
+        "pubtime": date(2026, 1, 1),
+        "medium_name": "Example Times",
+    }
     assert hashlib.sha256(raw.encode("utf-8")).hexdigest().startswith(source_id)
 
 
@@ -93,7 +97,7 @@ def test_load_chunks_txt_no_front_matter(tmp_path):
     chunks, metadata, source_id = load_chunks(source_path)
 
     assert chunks == [Chunk(index=0, content=raw.strip())]
-    assert metadata == {}
+    assert metadata == {"source_path": str(source_path)}
     assert hashlib.sha256(raw.encode("utf-8")).hexdigest().startswith(source_id)
 
 
@@ -161,6 +165,20 @@ def test_load_pdf_chunks_records_page_ranges(tmp_path):
     assert chunks[0].pages == (1, 2)
     assert chunks[1].pages == (3, 3)
     
+
+
+def test_load_chunks_samples_max_chunks(tmp_path):
+    """When a source produces more chunks than max_chunks, load_chunks should
+    down-sample to that many chunks, keeping them in ascending index order and
+    preserving each chunk's original index/page range (not renumbering them)."""
+    pdf_path = tmp_path / "doc.pdf"
+    _make_pdf(pdf_path, 5)
+
+    chunks, _, _ = load_chunks(pdf_path, pages_per_chunk=1, max_chunks=2)
+
+    assert len(chunks) == 2
+    assert [chunk.index for chunk in chunks] == sorted(chunk.index for chunk in chunks)
+    assert len({chunk.index for chunk in chunks}) == 2
 
 
 def test_load_chunks_markdown_has_no_page_range(tmp_path):
