@@ -9,22 +9,33 @@ Example usage:
     # Generate Q&A pairs from a PDF document using a specified model and domain config.
     python -m agentic_doc_qa.cli generate \
         "data/local/microbio-rag/raw_data/Packungsbeilagen Bakteriologie/Anaerotest.pdf" \
-        --output-dir "data/local/agentic-doc-qa/test" \
+        --output-dir-base "data/local/agentic-doc-qa/test" \
         --domain-config "configs/domains/microbio_preanalytical.yaml" \
         --model-name "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4"
 
     # For markdown documents with frontmatter:
     python -m agentic_doc_qa.cli generate \
         "data/local/swissdox/markdown_samples/54036612.md" \
-        --output-dir "data/local/agentic-doc-qa/test-swissdox" \
-        --domain "configs/domains/swissdox.yaml" \
+        --output-dir-base "data/local/agentic-doc-qa/test-swissdox" \
+        --domain-config "configs/domains/swissdox.yaml" \
         --model-name "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4"
 
     python -m agentic_doc_qa.cli chat \
         "data/local/swissdox/markdown_samples/56446175.md" \
-        --output-dir "data/local/agentic-doc-qa/test-swissdox" \
-        --domain "configs/domains/swissdox.yaml" \
+        --output-dir-base "data/local/agentic-doc-qa/test-swissdox" \
+        --domain-config "configs/domains/swissdox.yaml" \
         --model-name "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-NVFP4"
+
+    # For batch generation of multiple PDFs in a directory, e.g. for the "Packungsbeilagen Bakteriologie" dataset:
+    for pdf in "data/local/microbio-rag/raw_data/Packungsbeilagen Bakteriologie"/*.pdf; do
+        python -m agentic_doc_qa.cli generate ${pdf} \
+            --output-dir-base "data/local/microbio-rag/eval_data/agentic-doc-qa/Packungsbeilagen Bakteriologie" \
+            --domain-config "configs/domains/microbio_preanalytical.yaml" \
+            --pages-per-chunk 1 \
+            --n-candidates 2 \
+            --model-name "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8"
+    done
+
 """
 
 import argparse
@@ -54,6 +65,8 @@ def _add_generation_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("-n", "--n-candidates", type=int, default=4,
         help="Number of candidate QA pairs to generate per chunk. Longer documents "
             "will end up with more total Q&A pairs (default: %(default)s).")
+    p.add_argument("--pages-per-chunk", type=int, default=4,
+        help="For .pdf sources, number of pages to render per chunk (default: %(default)s).")
 
 def _add_logging_args(p: argparse.ArgumentParser) -> None:
     """Add logging-related arguments to the given ArgumentParser."""
@@ -113,7 +126,7 @@ async def _generate_async(args) -> None:
         raise FileNotFoundError(f"Source document not found: {args.source}")
 
     # load the document into chunks, plus metadata and a source_id
-    chunks, metadata, source_id = load_chunks(args.source, vision=not args.no_vision)
+    chunks, metadata, source_id = load_chunks(args.source, vision=not args.no_vision, pages_per_chunk=args.pages_per_chunk)
 
     # initalize the model
     model = build_model(args.model_name, base_url=args.base_url, api_key=args.api_key)

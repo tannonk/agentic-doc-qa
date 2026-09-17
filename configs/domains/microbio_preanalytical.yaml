@@ -19,7 +19,7 @@ generation:
     {example_questions}
 
     Ensure that the generated questions are specific, clear, and relevant to the scientific, microbiology context.
-  example_questions_sample_size: 8
+  example_questions_sample_size: 4
   example_questions:
     - "What is the correct fill volume for a Urine-monovette with stabilizer?"
     - "How is a catheter tip sent for microbiological examination?"
