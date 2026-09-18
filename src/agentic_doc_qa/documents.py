@@ -62,7 +62,7 @@ def load_chunks(
         "source_path": str(file_path),
     }
 
-    if file_path.suffix in ".md":
+    if file_path.suffix == ".md":
         chunks, metadata = _load_markdown_chunks(file_path, metadata)
 
     elif file_path.suffix == ".pdf":
