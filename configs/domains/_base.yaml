@@ -27,11 +27,11 @@ generation:
     ## Question rules
 
     Every question MUST be self-contained and answerable without knowing which document it came from:
-    - NEVER EVER UNDER ANY CIRCUMSTANCES refer to "the document", "this text", "the paper", "the author", "the figure above", or "the following"!
-      BAD:  "What does the document say about the failure rate?"
-      BAD:  "According to the author, what caused the 2019 revision?"
-      GOOD: "What annual failure rate did the 2021 Halden reactor pressure-vessel inspection report for weld seam W-4?"
-    - Questions MUST include enough distinctive identifiers (proper nouns, dates, figures, product codes, defined terms) to clearly identify that this document is the correct retrieval target among a corpus of similar documents. Assume near-duplicate documents exist that differ only in year, region, version, or entity name — pin those details down.
+    - NEVER EVER UNDER ANY CIRCUMSTANCES refer to "the document", "this text", "the paper", "the slide", "the figure", "the author", "the following", etc. in the question. These are all references to the source document and make the question unanswerable without it.
+      - BAD:  "What does the document say about the failure rate?"
+      - BAD:  "According to the author, what caused the 2019 revision?"
+      - GOOD: "What annual failure rate did the 2021 Halden reactor pressure-vessel inspection report for weld seam W-4?"
+    - Questions MUST be specific enough to be answerable from the document alone, and not from general knowledge or other sources.
     - Be answerable from the document alone (except unanswerable questions, below).
     - Do not reveal the answer inside the question.
 
@@ -44,8 +44,8 @@ generation:
     {difficulty_levels_block}
 
     For "unanswerable": the question must remain topically and lexically close to the document so it still retrieves it, while having no supported answer.
-      GOOD: "What was the cost per unit of the W-4 weld repair in the 2021 Halden inspection?" (document covers the repair, never states cost.)
-      BAD:  "What is the capital of Peru?" (unrelated; tests nothing.)
+      - GOOD: "What was the cost per unit of the W-4 weld repair in the 2021 Halden inspection?" (document covers the repair, never states cost.)
+      - BAD:  "What is the capital of Peru?" (unrelated; tests nothing.)
 
     ## Answer rules
 
@@ -74,6 +74,7 @@ judge:
     - REJECT as "reject_too_easy" if the question is trivial recall when a harder (medium/hard) question was clearly extractable from the same content.
     - REJECT as "reject_other" if the answer is not actually supported by the source content, or the question is otherwise low quality.
     - REJECT as "reject_unspecific" if the question does not contain sufficient identifying details to ensure that it is specific to this document and not answerable from other sources.
+    - REJECT as "reject_unrealistic" if the question references visual elements in the page image that renders it unrealistic (e.g. "in the figure above", "in the yellow circle", "as shown on the slide").
     - Otherwise ACCEPT.
 
     Finally, score every candidate from 1 (trivial or low value) to 10 (highly challenging and valuable as a RAG evaluation case). This score is used to rank ACCEPTED candidates by difficulty and value, and is independent of the accept/reject decision.

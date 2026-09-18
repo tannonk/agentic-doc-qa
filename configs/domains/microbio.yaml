@@ -12,13 +12,14 @@ generation:
 
     The document is a microbiology-related source. 
     
-    Identify and generate questions that are relevant to pre-analytical, analytical, post-analytical, and/or work-safety procedures in medical microbiology with respect to the source document.
+    Identify and generate questions that are relevant to pre-analytical, analytical, post-analytical, and/or work-safety procedures in medical microbiology.
     
-    Use the following example questions as a guide for the type of questions to generate:
+    Use the following example questions as inspiration for the type of questions to generate:
     
     {example_questions}
 
-    Ensure that the generated questions are specific to the source document, clear, and relevant to the medical microbiology context.
+    Avoid explicit references to visual elements that render the question unrealistic to be asked by a user (e.g. "according to the figure", "on the left of the slide", etc.).
+
   example_questions_sample_size: 4
   example_questions:
     - "What is the correct fill volume for a Urine-monovette with stabilizer?"
