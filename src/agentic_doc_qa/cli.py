@@ -205,11 +205,11 @@ def cmd_generate(args) -> None:
 
 
 def cmd_review(args) -> None:
-    """Shell out to streamlit -- review_app.py can't be called as a plain
+    """Shell out to streamlit -- review_app/app.py can't be called as a plain
     function without the Streamlit runtime."""
     import subprocess
     
-    app_path = Path(__file__).parent.parent / "review_app.py"
+    app_path = Path(__file__).parent.parent / "review_app" / "app.py"
     subprocess.run([
         sys.executable, "-m", "streamlit", "run", str(app_path), "--",
         "--input-dir", str(args.input_dir), "--validated-dir", str(args.output_dir_base / "validated"),
