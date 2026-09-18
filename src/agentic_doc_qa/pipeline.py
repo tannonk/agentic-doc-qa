@@ -132,7 +132,8 @@ async def propose_qa_pairs(
     pool: list[JudgedQAPair] = []
     current_usage = None
     for attempt in range(2):
-        logger.info(f"Generating QA pairs for chunk {chunk.index + 1} (of {total_chunks}), attempt {attempt + 1}")
+        # note total_chunks can be less than the chunk.index if only processing a subset of chunks (e.g. with --max-chunks)
+        logger.info(f"Generating QA pairs for chunk {chunk.index} (of {total_chunks}), attempt {attempt + 1}")
 
         result = await generation_agent.run(chunk.content, deps=deps, usage=current_usage)
         candidates = result.output.pairs
@@ -146,7 +147,7 @@ async def propose_qa_pairs(
         current_usage = judgement_result.usage # update usage for next attempt
         logger.info(f"Current usage after judging iteration {attempt + 1}: {current_usage}")
         accepted = select_accepted(candidates, judgement_result.output)
-        logger.info(f"Accepted {len(accepted)} out of {len(candidates)} pairs for chunk {chunk.index + 1} on attempt {attempt + 1}")
+        logger.info(f"Accepted {len(accepted)} out of {len(candidates)} pairs for chunk {chunk.index} on attempt {attempt + 1}")
 
         pool.extend(accepted)
         if len(accepted) >= len(candidates) or attempt == 1:
@@ -160,7 +161,7 @@ async def propose_qa_pairs(
         logger.info(f"Feedback for next attempt: {deps.feedback}")
 
     if run_final_selection and len(pool) > n_candidates:
-        logger.info(f"Pool has {len(pool)} candidates for chunk {chunk.index + 1}; running final validation to pick top {n_candidates}")
+        logger.info(f"Pool has {len(pool)} candidates for chunk {chunk.index}; running final validation to pick top {n_candidates}")
         pool_pairs = [jp.pair for jp in pool]
         final_judgement = await judge_agent.run(
             _build_judge_user_content(chunk, pool_pairs, avoid_questions, parent_pair), usage=current_usage
